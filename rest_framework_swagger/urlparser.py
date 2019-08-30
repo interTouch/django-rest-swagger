@@ -6,13 +6,22 @@ from django.conf import settings
 from django.utils import six
 from django.utils.six.moves.urllib_parse import urljoin
 from django.urls.resolvers import URLResolver
-from django.urls.resolvers import RegexPattern
+from django.urls.resolvers import URLPattern
 from django.contrib.admindocs.views import simplify_regex
 
 from rest_framework.views import APIView
 
 from .apidocview import APIDocView
 from . import SWAGGER_SETTINGS
+
+
+def get_regex(resolver_or_pattern):
+    """Utility method for django's deprecated resolver.regex"""
+    try:
+        regex = resolver_or_pattern.regex
+    except AttributeError:
+        regex = resolver_or_pattern.pattern.regex
+    return regex
 
 
 class UrlParser(object):
@@ -120,8 +129,7 @@ class UrlParser(object):
         if callback is None or self.__exclude_router_api_root__(callback):
             return
 
-        path = simplify_regex(prefix + pattern.regex.pattern)
-
+        path = simplify_regex(prefix + get_regex(pattern).pattern)
         if filter_path is not None:
             if re.match('^/?%s(/.*)?$' % re.escape(filter_path), path) is None:
                 return None
@@ -151,7 +159,7 @@ class UrlParser(object):
         pattern_list = []
 
         for pattern in patterns:
-            if isinstance(pattern, RegexPattern):
+            if isinstance(pattern, URLPattern):
                 endpoint_data = self.__assemble_endpoint_data__(
                     pattern, prefix, filter_path=filter_path)
 
@@ -161,12 +169,11 @@ class UrlParser(object):
                 pattern_list.append(endpoint_data)
 
             elif isinstance(pattern, URLResolver):
-
                 if pattern.namespace is not None \
                         and pattern.namespace in exclude_namespaces:
                     continue
 
-                pref = prefix + pattern.regex.pattern
+                pref = prefix + get_regex(pattern).pattern
                 pattern_list.extend(self.__flatten_patterns_tree__(
                     pattern.url_patterns,
                     pref,
